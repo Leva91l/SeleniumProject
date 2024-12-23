@@ -12,6 +12,7 @@ def driver(request):
 
 
 class TestSteamLoginForm:
+    """Не писал по Page object, изза того что итак затянул"""
     URL_PAGE = "https://store.steampowered.com/"
     HOME_PAGE_LOGIN_BUTTON = ("xpath", "//*[@id='global_action_menu']//a[contains(text(), 'войти')]")
     LOGIN_FIELD = ("xpath", "//input[contains(@class, '_2GBWeup5cttgbTw8FM3tfx') and contains(@type, 'text')]")
