@@ -1,47 +1,56 @@
-import pytest
-from selenium import webdriver
+import time
+
+import faker
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-
-@pytest.fixture(autouse=True)
-def driver(request):
-    driver = webdriver.Chrome()
-    driver.maximize_window()
-    yield driver
+fake = faker.Faker()
 
 
 class TestSteamLoginForm:
     URL_PAGE = "https://store.steampowered.com/"
-    HOME_PAGE_LOGIN_BUTTON = ("xpath", "//*[@id='global_action_menu']//a[contains(text(), 'войти')]")
-    LOGIN_FIELD = ("xpath", "//input[contains(@class, '_2GBWeup5cttgbTw8FM3tfx') and contains(@type, 'text')]")
-    PASSWORD_FIELD = ("xpath", "//input[contains(@class, '_2GBWeup5cttgbTw8FM3tfx') and contains(@type, 'password')]")
-    SIGN_IN_BUTTON = ("xpath", "//button[@type='submit']")
+    TIMEOUT = 10
+    HOME_PAGE_LOGIN_BUTTON = (By.XPATH, "//*[@id='global_action_menu']//a[@class='global_action_link']")
+    # Очень длинный локатор, так можно? Просто проблема в том что все что выше - это куча divов с единственным атрибутом class автогенерируемым.
+    # Никак не привязаться иначе.↓↓↓
+    LOGIN_FIELD = (By.XPATH,
+                   "//input[@type='text' and not(contains(@id, 'authcode')) and not(contains(@id, 'friendlyname')) and not(contains(@id, 'twofactorcode_entry'))]")
+    PASSWORD_FIELD = (By.XPATH, "//input[@type='password']")
+    #С кнопкой войти меняющейся на кнопку загрузки у меня не получилось никак кроме как использовать классы
+    #Ничего кроме классов не меняется у них. По сути это одна кнопка меняющая стиль↓↓↓
+    SIGN_IN_BUTTON = (By.XPATH, "//button[@class='DjSvCZoKKfoNSmarsEcTS']")
     LOADING_BUTTON = (
-        "xpath", "//*[contains(@class, 'DjSvCZoKKfoNSmarsEcTS') or contains(@class, '_2NVQcOnbtdGIu9O-mB9-YE')]")
-    WRONG_LOGIN_TEXT = ("xpath", "//*[@class='_1W_6HXiG4JJ0By1qN_0fGZ']")
+        By.XPATH, "//button[@class='DjSvCZoKKfoNSmarsEcTS _2NVQcOnbtdGIu9O-mB9-YE']")
+    # здесь та же проблема, можно зацепиться за form, но дальше так же куча divов с единственным атрибутом class автогенерируемым.
+    # что лучше - индекс или класс??↓↓↓
+    WRONG_LOGIN_TEXT = (By.XPATH, "(//form/div)[5]")
+
+    @staticmethod
+    def page_loading_assertation(driver):
+        timeout = 10
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            # кстати, ничего не работало, пока return не добавил ↓↓↓ Зато разобрался =)
+            result = driver.execute_script('return document.readyState')
+            if result != "complete":
+                time.sleep(1)
+                end_time = end_time - 1
+            else:
+                break
+        else:
+            raise TimeoutError
 
     def test_login_steam(self, driver):
         wait = WebDriverWait(driver, 10)
         driver.get(self.URL_PAGE)
-        driver.find_element(*self.HOME_PAGE_LOGIN_BUTTON).click()
-        wait.until(EC.visibility_of_element_located(self.LOGIN_FIELD)).send_keys('dskjbvid')
-        # вопрос, можно ли ждать появления только одного элемента, зная что остальные же вроде как тоже должны подгрузиться
-        # или нужно на каждый элемент писать явное ожидание?
-        driver.find_element(*self.PASSWORD_FIELD).send_keys('<PASSWORD>')
-        driver.find_element(*self.SIGN_IN_BUTTON).click()
+        self.page_loading_assertation(driver)
+        wait.until(EC.presence_of_element_located(self.HOME_PAGE_LOGIN_BUTTON)).click()
+        wait.until(EC.visibility_of_element_located(self.LOGIN_FIELD)).send_keys(fake.name())
+        wait.until(EC.visibility_of_element_located(self.PASSWORD_FIELD)).send_keys(fake.password())
+        wait.until(EC.element_to_be_clickable(self.SIGN_IN_BUTTON)).click()
+        assert wait.until(EC.invisibility_of_element(self.SIGN_IN_BUTTON))
         assert wait.until(EC.visibility_of_element_located(self.LOADING_BUTTON)).is_displayed()
-        assert wait.until(EC.visibility_of_element_located(self.WRONG_LOGIN_TEXT)).is_displayed()
-
-
-"""Вопросы:
-1) Отличие явного от неявного иожидания - в том что явное ждет условия для одного элемента, а неявное ждет появление элемента на странице при чем применяется ко всем элементам
-2) expected conditions - много разных (visibilityOfElementLocated, elementToBeClickable, presenceOfElementLocated и тд), 
-    все для каких то условий(кликабельность, видимость, появления текста определенного, исчезновения элемента и тд), короче гибкий инструмент, сохранил шпаргалку себе
-3) Отличие find_element от find_elements - Первый ищет первый подходящий элемент и возвращает его.
-    Если не находит то генерирует искл. - NoSuchElementException
-    Второй ищет все подходящие элементы, возвращает их список. Если не находит - возвращает пустой список без исключения
-    Вот про их аналоги не совсем понял, можешь объяснить? Сам думаю что аналог это - presenceOfElementLocated потому что просто ищет элемент в DOM
-4) Если явное ожидание не найдет элемент - TimeoutException
-    Если неявное - NoSuchElementException
-5) что будет, если локатор находит сразу несколько элементов - Либо работает с первым, если это возможно, если нет - то упадет с ошибкой"""
+        assert wait.until(EC.visibility_of_element_located(self.SIGN_IN_BUTTON))
+        assert wait.until(EC.text_to_be_present_in_element(
+            self.WRONG_LOGIN_TEXT, 'Пожалуйста, проверьте свой пароль и имя аккаунта и попробуйте снова.'))
