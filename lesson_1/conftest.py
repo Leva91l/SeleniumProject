@@ -7,3 +7,8 @@ def driver(request):
     driver.maximize_window()
     yield driver
     driver.quit()
+
+
+@pytest.fixture
+def get_url(driver):
+    driver.get("https://store.steampowered.com/")
