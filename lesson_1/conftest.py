@@ -1,7 +1,10 @@
 import pytest
 from selenium import webdriver
 
-@pytest.fixture(autouse=True)
+
+HOMEPAGE_URL = "https://store.steampowered.com/"
+
+@pytest.fixture
 def driver(request):
     driver = webdriver.Chrome()
     driver.maximize_window()
@@ -11,4 +14,6 @@ def driver(request):
 
 @pytest.fixture
 def get_url(driver):
-    driver.get("https://store.steampowered.com/")
+    driver.get(HOMEPAGE_URL)
+
+
